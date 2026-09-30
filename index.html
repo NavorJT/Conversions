@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quick Convert</title>
+<meta name="theme-color" content="#0a7a5a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Convert">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--text:#14181f;--muted:#6b7280;--accent:#0a7a5a;--line:#e2e5ea;--chip:#e9ecf1;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1218;--card:#1a1f29;--text:#eef1f6;--muted:#98a1b0;--accent:#34d3a0;--line:#2a313e;--chip:#252c39}}
+:root[data-theme="dark"]{--bg:#0f1218;--card:#1a1f29;--text:#eef1f6;--muted:#98a1b0;--accent:#34d3a0;--line:#2a313e;--chip:#252c39}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:480px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 14px}
+.tabs,.sub{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.sub{margin-bottom:12px}
+.tab{padding:10px 4px;border:0;border-radius:10px;background:var(--chip);color:var(--text);font-size:14px;font-weight:600}
+.sub .tab{font-size:13px;padding:8px 2px}
+.tab.on{background:var(--accent);color:#fff}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:14px}
+.row{display:flex;flex-direction:column;gap:4px}
+.pair{display:flex;gap:8px}
+.pair input{min-width:0}
+.lab{font-size:13px;color:var(--muted);font-weight:600}
+input{width:100%;font-size:32px;font-weight:600;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:transparent;color:var(--text)}
+input:focus{outline:2px solid var(--accent)}
+.swap{display:block;margin:10px auto;width:48px;height:48px;border-radius:50%;border:0;background:var(--accent);color:#fff;font-size:22px}
+.rate{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)}
+.rate input{font-size:18px;width:110px;padding:6px 8px}
+.note{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<h1>Quick Convert</h1>
+<div class="tabs" id="tabs"></div>
+<div class="card">
+  <div class="sub" id="sub" hidden></div>
+  <div class="row"><span class="lab" id="la"></span><input id="a" inputmode="decimal" autocomplete="off" placeholder="0"></div>
+  <button class="swap" id="swap" aria-label="Swap">⇅</button>
+  <div class="row" id="rowB"><span class="lab" id="lb"></span><input id="b" inputmode="decimal" autocomplete="off" placeholder="0"></div>
+  <div class="row" id="rowH" hidden><span class="lab">ft / in</span>
+    <div class="pair"><input id="hf" inputmode="numeric" autocomplete="off" placeholder="ft"><input id="hi" inputmode="decimal" autocomplete="off" placeholder="in"></div></div>
+</div>
+<div class="card rate" id="rateBox">
+  <span>1 CAD =</span><input id="fx" inputmode="decimal"><span>USD</span>
+</div>
+<p class="note" id="note"></p>
+</main>
+<script>
+var F={dist:0.621371,wt:2.204623,vol:0.264172,spd:0.621371,area:10.76391}; // b = a*F
+var U={dist:['km','mi'],wt:['kg','lb'],vol:['L','gal'],spd:['km/h','mph'],area:['m²','sq ft']};
+var N={vol:'Volume',wt:'Weight',g100:'Per 100 g',dist:'Distance'};
+var S={tab:'cur',unit:'vol',flip:false,fx:0.73};
+try{var s=JSON.parse(localStorage.getItem('qc')||'null');if(s)S=Object.assign(S,s)}catch(e){}
+function save(){try{localStorage.setItem('qc',JSON.stringify(S))}catch(e){}}
+var tabs=[['cur','CAD/USD'],['dist','km/mi'],['wt','kg/lb'],['vol','L/gal'],['spd','Speed'],['height','Height'],['area','Area'],['price','Price']];
+var $=function(i){return document.getElementById(i)};
+function cfg(){
+  var t=S.tab,k=1,la,lb,m=false;
+  if(t==='cur'){k=S.fx;la='CAD';lb='USD';m=true}
+  else if(t==='height'){return{h:true,la:'cm'}}
+  else if(t==='price'){var u=S.unit;m=true;
+    if(u==='g100'){k=S.fx*4.53592;la='CAD per 100 g';lb='USD per lb'}
+    else{k=S.fx/F[u];la='CAD per '+U[u][0];lb='USD per '+U[u][1]}}
+  else{k=F[t];la=U[t][0];lb=U[t][1]}
+  if(S.flip){k=1/k;var x=la;la=lb;lb=x}
+  return{k:k,la:la,lb:lb,m:m}
+}
+function fmt(x,m){if(!isFinite(x))return'';var r=Math.round(x*1e4)/1e4;return r.toLocaleString('en-US',{minimumFractionDigits:m?2:0,maximumFractionDigits:4,useGrouping:false})}
+function num(v){var n=parseFloat(String(v).replace(',','.'));return isNaN(n)?null:n}
+function fromA(){
+  var c=cfg(),v=num($('a').value);
+  if(c.h){
+    if(v===null){$('hf').value='';$('hi').value='';return}
+    var t=v/2.54,ft=Math.floor(t/12),inch=Math.round((t-ft*12)*10)/10;
+    if(inch>=12){ft+=1;inch=0}
+    $('hf').value=ft;$('hi').value=inch;return
+  }
+  $('b').value=v===null?'':fmt(v*c.k,c.m)
+}
+function render(){
+  $('tabs').innerHTML='';
+  tabs.forEach(function(t){var b=document.createElement('button');b.className='tab'+(S.tab===t[0]?' on':'');b.textContent=t[1];
+    b.onclick=function(){S.tab=t[0];S.flip=false;save();render()};$('tabs').appendChild(b)});
+  var sub=$('sub');sub.hidden=S.tab!=='price';sub.innerHTML='';
+  if(S.tab==='price')['vol','wt','g100','dist'].forEach(function(u){var b=document.createElement('button');b.className='tab'+(S.unit===u?' on':'');b.textContent=N[u];
+    b.onclick=function(){S.unit=u;S.flip=false;save();render()};sub.appendChild(b)});
+  var c=cfg(),H=!!c.h;
+  $('la').textContent=c.la;
+  $('rowB').hidden=H;$('rowH').hidden=!H;$('swap').hidden=H;
+  if(!H)$('lb').textContent=c.lb;
+  $('rateBox').hidden=H||!c.m;$('fx').value=S.fx;
+  var n='';
+  if(S.tab==='price')n=(S.unit==='g100'?'Turns a Canadian per-100 g shelf price into US price per pound. ':'Uses US gallons. ')+'Uses the exchange rate above.';
+  else if(S.tab==='vol')n='US gallons (1 US gal = 3.785 L).';
+  else if(S.tab==='cur')n='Update the rate whenever you like; it is saved on your phone.';
+  else if(H)n='Enter centimetres, or type feet and inches to get cm.';
+  $('note').textContent=n;
+  fromA();
+}
+$('a').addEventListener('input',fromA);
+$('b').addEventListener('input',function(){var c=cfg(),v=num(this.value);$('a').value=v===null?'':fmt(v/c.k,c.m)});
+function fromH(){var f=num($('hf').value),i=num($('hi').value);
+  if(f===null&&i===null){$('a').value='';return}
+  $('a').value=fmt(((f||0)*12+(i||0))*2.54,false)}
+$('hf').addEventListener('input',fromH);$('hi').addEventListener('input',fromH);
+$('swap').onclick=function(){S.flip=!S.flip;$('a').value=$('b').value;save();render()};
+$('fx').addEventListener('input',function(){var v=num(this.value);if(v&&v>0){S.fx=v;save();var c=cfg();$('la').textContent=c.la;fromA()}});
+render();
+if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('sw.js').catch(function(){})})}
+</script>
+</body>
+</html>
